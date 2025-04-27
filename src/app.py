@@ -240,7 +240,6 @@ def main():
     # Define metrics and their tooltips
     metrics_info = [
         ("Task Time Distribution", "Shows the sum of kernel execution times for each task across the entire application."),
-        ("Performance Dashboard", "Key performance metrics for each task graph (total execution time, average kernel time, etc)."),
         ("Memory Usage", "Total and average memory usage (copy-in bytes) for each task graph."),
         ("Power Usage", "Average power usage for each task graph."),
         ("Copy-In/Copy-Out Analysis", "Analyze the time and number of operations spent on data transfers into and out of the device."),
@@ -255,10 +254,10 @@ def main():
 
     for metric, tooltip in metrics_info:
         default = metric in [
-            "Task Time Distribution", "Performance Dashboard", "Memory Usage", "Power Usage", "Copy-In/Copy-Out Analysis", "Total Execution Time Analysis", "Task Graph Analysis", "Summary Statistics"
+            "Task Time Distribution", "Memory Usage", "Power Usage", "Copy-In/Copy-Out Analysis", "Total Execution Time Analysis", "Task Graph Analysis", "Summary Statistics"
         ]
         show_metrics[metric] = st.sidebar.checkbox(
-            f"{metric} ⓘ",
+            metric,
             value=default,
             help=tooltip,
             key=f"cb_{metric.replace(' ', '_')}"
@@ -335,7 +334,7 @@ def main():
                 # --- Per-task kernel execution time aggregation ---
                 task_kernel = raw_df[raw_df['Metric'] == 'TASK_KERNEL_TIME'].copy()
                 task_kernel['total_kernel_time'] = task_kernel['Mean'] * task_kernel['Count']
-                per_task = task_kernel.groupby('Task').agg({'total_kernel_time': 'sum'}).reset_index()
+                per_task = task_kernel.groupby(['Task Graph', 'Task']).agg({'total_kernel_time': 'sum'}).reset_index()
                 per_task['total_kernel_time'] = convert_time_unit(per_task['total_kernel_time'], 'ns', time_unit)
                 pie_data = per_task.rename(columns={'Task': 'task_name', 'total_kernel_time': 'time'})
 
@@ -352,14 +351,16 @@ def main():
                     - Each bar represents the total time spent in that task, summed over all executions and all task graph instances.
                     - This helps identify which tasks are the most time-consuming in your entire workload, not just within a single task graph.
                     """)
-                    fig_bar = px.bar(per_task, x='Task', y='total_kernel_time', labels={'total_kernel_time': f'Task Time Distribution ({time_unit})'})
+                    fig_bar = px.bar(
+                        per_task,
+                        x='Task',
+                        y='total_kernel_time',
+                        color='Task Graph',
+                        labels={'total_kernel_time': f'Task Time Distribution ({time_unit})'}
+                    )
                     st.plotly_chart(fig_bar)
                     fig_pie = px.pie(pie_data, names='task_name', values='time', title=f'Task Time Distribution ({time_unit})')
                     st.plotly_chart(fig_pie)
-
-                if show_metrics["Performance Dashboard"]:
-                    st.header("Performance Dashboard")
-                    st.plotly_chart(visualizer.create_performance_metrics_dashboard(summary_df, time_unit=time_unit))
 
                 if show_metrics["Memory Usage"]:
                     st.header("Memory Usage")
@@ -435,31 +436,32 @@ def main():
                         graph_total = (overall_exec_time[overall_exec_time['Task Graph'] == graph]['Mean'] * overall_exec_time[overall_exec_time['Task Graph'] == graph]['Count']).sum()
                         graph_total_conv = convert_time_unit(pd.Series([graph_total]), 'ns', time_unit).iloc[0]
                         row['Total Time'] = graph_total_conv
-                        row['% of Total'] = round((graph_total / total_exec_time * 100), 2) if total_exec_time > 0 else 0
                         # Kernel
                         kernel = raw_df[(raw_df['Task Graph'] == graph) & (raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'TOTAL_KERNEL_TIME')]
                         kernel_time = (kernel['Mean'] * kernel['Count']).sum()
                         kernel_time_conv = convert_time_unit(pd.Series([kernel_time]), 'ns', time_unit).iloc[0]
-                        row['Kernel Time'] = kernel_time_conv
-                        row['Kernel %'] = round((kernel_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
                         # Dispatch
                         dispatch = raw_df[(raw_df['Task Graph'] == graph) & (raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'TOTAL_DISPATCH_KERNEL_TIME')]
                         dispatch_time = (dispatch['Mean'] * dispatch['Count']).sum()
                         dispatch_time_conv = convert_time_unit(pd.Series([dispatch_time]), 'ns', time_unit).iloc[0]
-                        row['Dispatch Time'] = dispatch_time_conv
-                        row['Dispatch %'] = round((dispatch_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
                         # Copy-In
                         copyin = raw_df[(raw_df['Task Graph'] == graph) & (raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'COPY_IN_TIME')]
                         copyin_time = (copyin['Mean'] * copyin['Count']).sum()
                         copyin_time_conv = convert_time_unit(pd.Series([copyin_time]), 'ns', time_unit).iloc[0]
-                        row['Copy-In Time'] = copyin_time_conv
-                        row['Copy-In %'] = round((copyin_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
                         # Copy-Out
                         copyout = raw_df[(raw_df['Task Graph'] == graph) & (raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'COPY_OUT_TIME')]
                         copyout_time = (copyout['Mean'] * copyout['Count']).sum()
                         copyout_time_conv = convert_time_unit(pd.Series([copyout_time]), 'ns', time_unit).iloc[0]
+                        # Component sum for per-task-graph breakdown
+                        component_sum = kernel_time + dispatch_time + copyin_time + copyout_time
+                        row['Kernel Time'] = kernel_time_conv
+                        row['Kernel %'] = round((kernel_time / component_sum * 100), 2) if component_sum > 0 else 0
+                        row['Dispatch Time'] = dispatch_time_conv
+                        row['Dispatch %'] = round((dispatch_time / component_sum * 100), 2) if component_sum > 0 else 0
+                        row['Copy-In Time'] = copyin_time_conv
+                        row['Copy-In %'] = round((copyin_time / component_sum * 100), 2) if component_sum > 0 else 0
                         row['Copy-Out Time'] = copyout_time_conv
-                        row['Copy-Out %'] = round((copyout_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
+                        row['Copy-Out %'] = round((copyout_time / component_sum * 100), 2) if component_sum > 0 else 0
                         breakdown_rows.append(row)
                     breakdown_df = pd.DataFrame(breakdown_rows)
                     st.dataframe(breakdown_df)
@@ -480,6 +482,56 @@ def main():
                         xaxis_title='Task Graph'
                     )
                     st.plotly_chart(fig_stack)
+
+                    # Improved sunburst chart for hierarchical breakdown
+                    component_colors = {
+                        'Kernel': '#1f77b4',
+                        'Dispatch': '#ff7f0e',
+                        'Copy-In': '#2ca02c',
+                        'Copy-Out': '#d62728'
+                    }
+                    sunburst_data = []
+                    for row in breakdown_rows:
+                        graph = row['Task Graph']
+                        for comp, label in [
+                            ('Kernel Time', 'Kernel'),
+                            ('Dispatch Time', 'Dispatch'),
+                            ('Copy-In Time', 'Copy-In'),
+                            ('Copy-Out Time', 'Copy-Out')
+                        ]:
+                            value = row[comp]
+                            if value > 0:
+                                sunburst_data.append({
+                                    'Task Graph': graph,
+                                    'Component': label,
+                                    'Time': value
+                                })
+                    sunburst_df = pd.DataFrame(sunburst_data)
+                    fig_sunburst = px.sunburst(
+                        sunburst_df,
+                        path=['Task Graph', 'Component'],
+                        values='Time',
+                        color='Component',
+                        color_discrete_map=component_colors,
+                        title='Total Execution Time Breakdown by Task Graph and Component',
+                    )
+                    fig_sunburst.update_traces(
+                        hovertemplate="<b>%{label}</b><br>Time: %{value:,.2f} " + time_unit +
+                                     "<br>% of Total: %{percentRoot:.1%}<extra></extra>",
+                        textinfo='label+percent entry'
+                    )
+                    fig_sunburst.update_layout(
+                        margin=dict(t=60, l=0, r=0, b=0),
+                        font=dict(size=15)
+                    )
+                    st.markdown("""
+                    **What you see:**
+                    - The sunburst chart below shows how the total execution time is distributed across all task graphs (outer ring).
+                    - Each colored segment represents a task graph, and the size of each segment is proportional to its share of the total execution time.
+                    - Within each task graph, the chart is further divided into kernel, dispatch, copy-in, and copy-out components (inner segments), showing how each task graph's time is spent.
+                    - Hover over any segment to see the exact time and its percentage of the total.
+                    """)
+                    st.plotly_chart(fig_sunburst)
 
                 if show_metrics["Task Graph Analysis"]:
                     st.header("Task Graph Analysis")
