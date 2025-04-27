@@ -245,6 +245,7 @@ def main():
         ("Power Usage", "Average power usage for each task graph."),
         ("Copy-In/Copy-Out Analysis", "Analyze the time and number of operations spent on data transfers into and out of the device."),
         ("Total Execution Time Analysis", "Break down the total execution time of the application by task graph and action."),
+        ("Task Graph Analysis", "Analyze a specific task graph: see time, memory, and invocation breakdown per task."),
         ("Summary Statistics", "Statistical summary of the selected metrics."),
         ("Raw Data", "The raw input data as a DataFrame."),
     ]
@@ -254,7 +255,7 @@ def main():
 
     for metric, tooltip in metrics_info:
         default = metric in [
-            "Task Time Distribution", "Performance Dashboard", "Memory Usage", "Power Usage", "Copy-In/Copy-Out Analysis", "Total Execution Time Analysis", "Summary Statistics"
+            "Task Time Distribution", "Performance Dashboard", "Memory Usage", "Power Usage", "Copy-In/Copy-Out Analysis", "Total Execution Time Analysis", "Task Graph Analysis", "Summary Statistics"
         ]
         show_metrics[metric] = st.sidebar.checkbox(
             f"{metric} ⓘ",
@@ -479,6 +480,64 @@ def main():
                         xaxis_title='Task Graph'
                     )
                     st.plotly_chart(fig_stack)
+
+                if show_metrics["Task Graph Analysis"]:
+                    st.header("Task Graph Analysis")
+                    task_graphs = raw_df['Task Graph'].unique()
+                    if len(task_graphs) == 0:
+                        st.info("No task graphs found in the data.")
+                    else:
+                        selected_graph = st.selectbox("Select Task Graph", task_graphs)
+                        # Exclude OVERALL for per-task breakdown
+                        graph_df = raw_df[(raw_df['Task Graph'] == selected_graph) & (raw_df['Task'] != 'OVERALL')]
+                        # Only keep relevant metrics
+                        relevant_metrics = ['TASK_KERNEL_TIME', 'COPY_IN_TIME', 'COPY_OUT_TIME', 'DISPATCH_KERNEL_TIME']
+                        filtered = graph_df[graph_df['Metric'].isin(relevant_metrics)].copy()
+                        filtered['TotalTime'] = filtered['Mean'] * filtered['Count']
+                        # Convert to selected time unit
+                        unit_factors = {'ns': 1, 'ms': 1e-6, 'sec': 1e-9}
+                        factor = unit_factors.get(time_unit, 1)
+                        filtered['TotalTimeUnit'] = filtered['TotalTime'] * factor
+                        # Pivot to get each metric as a column
+                        pivot = filtered.pivot_table(
+                            index='Task',
+                            columns='Metric',
+                            values='TotalTimeUnit',
+                            aggfunc='sum',
+                            fill_value=0
+                        ).reset_index()
+                        # Calculate total per task for percentage
+                        pivot['Total'] = pivot[[m for m in relevant_metrics if m in pivot.columns]].sum(axis=1)
+                        # Prepare Plotly traces with percentage tooltips
+                        st.markdown(f"#### Time Breakdown per Task ({time_unit})")
+                        fig = go.Figure()
+                        metric_names = [
+                            ('TASK_KERNEL_TIME', '#1f77b4', 'Kernel Time'),
+                            ('COPY_IN_TIME', '#2ca02c', 'Copy-In Time'),
+                            ('COPY_OUT_TIME', '#d62728', 'Copy-Out Time'),
+                            ('DISPATCH_KERNEL_TIME', '#ff7f0e', 'Dispatch Time')
+                        ]
+                        for metric, color, label in metric_names:
+                            if metric in pivot.columns:
+                                percent = 100 * pivot[metric] / pivot['Total']
+                                fig.add_bar(
+                                    name=label,
+                                    x=pivot['Task'],
+                                    y=pivot[metric],
+                                    marker_color=color,
+                                    hovertemplate=(
+                                        f"<b>%{{x}}</b><br>{label}: %{{y:,.2f}} {time_unit}<br>"
+                                        f"% of Task: %{{customdata[0]:.1f}}%<extra></extra>"
+                                    ),
+                                    customdata=np.stack([percent], axis=-1)
+                                )
+                        fig.update_layout(barmode='stack', yaxis_title=f'Time ({time_unit})', xaxis_title='Task')
+                        st.plotly_chart(fig)
+                        # Memory usage overlay (if available)
+                        if 'copy_in_bytes' in graph_df.columns:
+                            mem_per_task = graph_df.groupby('Task').agg({'copy_in_bytes': 'sum'}).reset_index()
+                            st.markdown("#### Memory Usage per Task (Copy-In Bytes)")
+                            st.bar_chart(mem_per_task.set_index('Task')['copy_in_bytes'])
 
             with right_col:
                 # --- Format summary statistics for display ---
