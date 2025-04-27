@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this dashboard in your research, please cite it as below."
+title: "TornadoVMPulse"
+authors:
+  - family-names: Papadimitriou
+    given-names: Michail
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+    affiliation: "[Your Institution or Organization]"
+    email: "mpapadimitriou92@gmail.com"
+version: "1.0"
+date-released: "2024-04-27"
+repository-code: "https://github.com/mikepapadim/TornadoVMPulse"
+license: "MIT"
+keywords:
+  - TornadoVM
+  - Profiler
+  - Visualization
+  - Performance Analysis
+doi: "10.5281/zenodo.XXXXXXX"  # Replace with your Zenodo DOI if available
+url: "https://tornadovm.readthedocs.io/en/latest/profiler.html"
+abstract: |
+  The TornadoVMPulse is an interactive web application for visualizing and analyzing profiling data from TornadoVM. It supports both raw JSON/log files and pre-processed CSV files, providing deep insights into kernel execution, data transfer, memory, and power usage. If you use this tool in your research, please cite this repository. 
