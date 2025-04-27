@@ -2,10 +2,12 @@
   <img src="docs/pulse-logo.png" alt="TornadoVMPulse Logo" width="64" style="vertical-align: middle; margin-right: 10px;">
  TornadoVMPulse
 </h1>
-TornadoVMPulse is an interactive web dashboard for visualizing and analyzing profiling data from [TornadoVM](https://tornadovm.readthedocs.io/en/latest/profiler.html). It provides deep insights into kernel execution, data transfer, memory, and power usage, with a modern, user-friendly interface.
+TornadoVMPulse is an interactive web dashboard for visualizing and analyzing profiling data from <a href="https://tornadovm.readthedocs.io/en/latest/profiler.html">TornadoVM</a>. It provides deep insights into kernel execution, data transfer, memory, and power usage, with a modern, user-friendly interface.
+<br>
+<br>    
 
 <p align="center">
-  <img src="docs/main.png" alt="TornadoVMPulse Main Screenshot" width="1024"/>
+  <img src="docs/main.png" alt="TornadoVMPulse Main Screenshot" width="1240"/>
 </p>
 
 ---
