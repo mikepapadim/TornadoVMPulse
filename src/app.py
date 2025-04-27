@@ -125,7 +125,52 @@ def main():
         layout="wide"
     )
     
-    st.markdown("<h1 style='display: flex; align-items: center; gap: 0.5em;'>🌪️ TornadoVMPulse</h1>", unsafe_allow_html=True)
+    col1, col2 = st.columns([1, 11])
+    with col1:
+        st.image("static/pulse-logo.png", width=72)
+    with col2:
+        st.markdown(
+            """
+            <div style='display: flex; align-items: center; height: 82px;'>
+                <span style='font-size:2.4rem; font-weight: 700; color: white; margin-left: -1.5em;'>TornadoVMPulse - Quickly analyze TornadoVM profiling data</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with st.expander("ℹ️ About the TornadoVM Profiler", expanded=False):
+        st.markdown(
+            '''
+            <ul>
+                <li>
+                    <b>Official Documentation:</b>
+                    <a href="https://tornadovm.readthedocs.io/en/latest/profiler.html" target="_blank" style="color:#81D4FA;">
+                        TornadoVM Profiler Guide
+                    </a>
+                </li>
+                <li>
+                    <b>Enable the Profiler:</b> Use <code>--enableProfiler console</code> or <code>silent</code> with the <code>tornado</code> command, or via the <code>ExecutionPlan</code> API.
+                </li>
+                <li>
+                    <b>Profiler Output:</b> Produces detailed JSON logs for each task-graph, including kernel, dispatch, copy-in/out, and power metrics (all in nanoseconds).
+                </li>
+                <li>
+                    <b>Supported Power Metrics:</b> NVIDIA NVML (for OpenCL/PTX) and oneAPI Level Zero SYSMAN (for SPIRV) are supported for power usage reporting.
+                </li>
+                <li>
+                    <b>Save Profiler Output:</b> Use <code>--dumpProfiler &lt;FILENAME&gt;</code> to store logs in a file for later analysis.
+                </li>
+            </ul>
+            <p style='font-size:0.95em; color:#B0BEC5;'>
+                For a full explanation of all metrics and advanced usage, see the
+                <a href="https://tornadovm.readthedocs.io/en/latest/profiler.html" target="_blank" style="color:#81D4FA;">
+                    TornadoVM Profiler Documentation
+                </a>.
+            </p>
+            ''',
+            unsafe_allow_html=True
+        )
+
     st.markdown("""
     ### How to Use This Profiler Dashboard
     - **Upload a profiling log file**: You can upload either a raw JSON/log file (from TornadoVM or similar) or a pre-processed CSV file.
@@ -133,56 +178,125 @@ def main():
     - After upload, select your preferred time unit and choose which metrics to display using the sidebar.
     - The dashboard will provide detailed breakdowns of execution time, memory, power, and data transfer metrics.
     """)
-    st.markdown("""
-    <div style='background-color: #23272f; border-radius: 8px; padding: 1.2em; margin-bottom: 1.5em;'>
-        <h3 style='color:#4FC3F7;'>ℹ️ About the TornadoVM Profiler</h3>
-        <ul>
-            <li>
-                <b>Official Documentation:</b>
-                <a href="https://tornadovm.readthedocs.io/en/latest/profiler.html" target="_blank" style="color:#81D4FA;">
-                    TornadoVM Profiler Guide
-                </a>
-            </li>
-            <li>
-                <b>Enable the Profiler:</b> Use <code>--enableProfiler console</code> or <code>silent</code> with the <code>tornado</code> command, or via the <code>ExecutionPlan</code> API.
-            </li>
-            <li>
-                <b>Profiler Output:</b> Produces detailed JSON logs for each task-graph, including kernel, dispatch, copy-in/out, and power metrics (all in nanoseconds).
-            </li>
-            <li>
-                <b>Supported Power Metrics:</b> NVIDIA NVML (for OpenCL/PTX) and oneAPI Level Zero SYSMAN (for SPIRV) are supported for power usage reporting.
-            </li>
-            <li>
-                <b>Save Profiler Output:</b> Use <code>--dumpProfiler &lt;FILENAME&gt;</code> to store logs in a file for later analysis.
-            </li>
-        </ul>
-        <p style='font-size:0.95em; color:#B0BEC5;'>
-            For a full explanation of all metrics and advanced usage, see the
-            <a href="https://tornadovm.readthedocs.io/en/latest/profiler.html" target="_blank" style="color:#81D4FA;">
-                TornadoVM Profiler Documentation
-            </a>.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
 
-    # Sidebar for metric selection
-    st.sidebar.header("Select Metrics to Display")
-    st.sidebar.markdown("""
-    - **Task Time Distribution**: Shows the sum of kernel execution times for each task across the entire application.
-    - **Performance Dashboard**: Key performance metrics for each task graph (total execution time, average kernel time, etc).
-    - **Memory Usage**: Total and average memory usage (copy-in bytes) for each task graph.
-    - **Power Usage**: Average power usage for each task graph.
-    - **Summary Statistics**: Statistical summary of the selected metrics.
-    - **Raw Data**: The raw input data as a DataFrame.
-    """)
-    show_time_dist = st.sidebar.checkbox("Task Time Distribution", value=True, help="Bar and pie charts of per-task kernel execution time.")
-    show_performance = st.sidebar.checkbox("Performance Dashboard", value=True, help="Dashboard of key performance metrics for each task graph.")
-    show_memory = st.sidebar.checkbox("Memory Usage", value=True, help="Total and average memory usage for each task graph.")
-    show_power = st.sidebar.checkbox("Power Usage", value=True, help="Average power usage for each task graph.")
-    show_summary = st.sidebar.checkbox("Summary Statistics", value=True, help="Statistical summary of the selected metrics.")
-    show_raw = st.sidebar.checkbox("Raw Data", value=False, help="Show the raw input data as a DataFrame.")
+    # --- Sidebar: Metrics Configuration with tooltips ---
+    st.sidebar.markdown(
+        """
+        <style>
+        .sidebar-header {
+            font-size: 1.25em;
+            font-weight: 700;
+            color: #4FC3F7;
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+            margin-bottom: 0.5em;
+        }
+        .metric-row {
+            display: flex;
+            align-items: center;
+            gap: 0.4em;
+            margin-bottom: 0.2em;
+        }
+        .info-tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+            color: #81D4FA;
+            font-size: 1.1em;
+        }
+        .info-tooltip .tooltiptext {
+            visibility: hidden;
+            width: 260px;
+            background-color: #23272f;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 0.7em 1em;
+            position: absolute;
+            z-index: 1;
+            left: 120%;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 0.98em;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+        }
+        .info-tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.sidebar.markdown(
+        '<div class="sidebar-header">📊 Metrics Configuration</div>',
+        unsafe_allow_html=True
+    )
+
+    # Define metrics and their tooltips
+    metrics_info = [
+        ("Task Time Distribution", "Shows the sum of kernel execution times for each task across the entire application."),
+        ("Performance Dashboard", "Key performance metrics for each task graph (total execution time, average kernel time, etc)."),
+        ("Memory Usage", "Total and average memory usage (copy-in bytes) for each task graph."),
+        ("Power Usage", "Average power usage for each task graph."),
+        ("Summary Statistics", "Statistical summary of the selected metrics."),
+        ("Raw Data", "The raw input data as a DataFrame."),
+    ]
+
+    # Store checkbox states
+    show_metrics = {}
+
+    for metric, tooltip in metrics_info:
+        default = metric in [
+            "Task Time Distribution", "Performance Dashboard", "Memory Usage", "Power Usage", "Summary Statistics"
+        ]
+        show_metrics[metric] = st.sidebar.checkbox(
+            f"{metric} ⓘ",
+            value=default,
+            help=tooltip,
+            key=f"cb_{metric.replace(' ', '_')}"
+        )
+
     st.sidebar.markdown('---')
-    time_unit = st.sidebar.selectbox("Select time unit:", ["ns", "ms", "sec"], index=1)
+
+    # --- Custom CSS for prettier selectbox and label with clock icon ---
+    st.markdown(
+        """
+        <style>
+        .custom-label {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #81D4FA;
+            margin-bottom: 0.3em;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+        }
+        section[data-testid=\"stSidebar\"] .stSelectbox > div[data-baseweb=\"select\"] {
+            background-color: #23272f !important;
+            border-radius: 8px !important;
+            border: 1.5px solid #4FC3F7 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.sidebar.markdown(
+        '<div class="custom-label">🕒 Select time unit:</div>',
+        unsafe_allow_html=True
+    )
+    time_unit_options = {
+        "Nanosecond (ns)": "ns",
+        "Millisecond (ms)": "ms",
+        "Second (s)": "sec"
+    }
+    time_unit_display = st.sidebar.selectbox("", list(time_unit_options.keys()), index=1)
+    time_unit = time_unit_options[time_unit_display]
 
     uploaded_file = st.file_uploader("Upload a profiling log file (raw JSON/log or CSV)", type=['json', 'csv', 'log'])
 
@@ -215,7 +329,7 @@ def main():
                     if col in summary_df.columns:
                         summary_df[col] = convert_time_unit(summary_df[col], 'ns', time_unit)
 
-                if show_time_dist:
+                if show_metrics["Task Time Distribution"]:
                     st.header("Task Time Distribution")
                     st.markdown("""
                     **What you see:**
@@ -228,15 +342,15 @@ def main():
                     fig_pie = px.pie(pie_data, names='task_name', values='time', title=f'Task Time Distribution ({time_unit})')
                     st.plotly_chart(fig_pie)
 
-                if show_performance:
+                if show_metrics["Performance Dashboard"]:
                     st.header("Performance Dashboard")
                     st.plotly_chart(visualizer.create_performance_metrics_dashboard(summary_df, time_unit=time_unit))
 
-                if show_memory:
+                if show_metrics["Memory Usage"]:
                     st.header("Memory Usage")
                     st.plotly_chart(visualizer.create_memory_usage_chart(summary_df))
 
-                if show_power:
+                if show_metrics["Power Usage"]:
                     st.header("Power Usage")
                     st.plotly_chart(visualizer.create_power_usage_chart(summary_df))
 
@@ -369,15 +483,27 @@ def main():
                     return f"{x:,.0f} PB"
                 if 'copy_in_bytes' in summary_stats_df.columns:
                     summary_stats_df['copy_in_bytes'] = summary_stats_df['copy_in_bytes'].apply(format_bytes)
-                if show_summary:
+                if show_metrics["Summary Statistics"]:
                     st.subheader("Summary Statistics")
                     st.dataframe(summary_stats_df.describe())
-                if show_raw:
+                if show_metrics["Raw Data"]:
                     st.subheader("Raw Data")
                     st.dataframe(raw_df)
         except Exception as e:
             st.error(f"Error processing file: {str(e)}")
             st.error("Please make sure the file is in the correct format (CSV with Task Graph, Task, Metric columns, or raw JSON/log file)")
+
+    # Hide the Streamlit sidebar close (X) button
+    st.markdown(
+        """
+        <style>
+        button[title="Close sidebar"] {
+            display: none !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 if __name__ == "__main__":
     main() 
