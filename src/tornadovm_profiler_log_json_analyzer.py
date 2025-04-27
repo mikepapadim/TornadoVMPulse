@@ -392,11 +392,9 @@ def main():
     try:
         # Parse the JSON data
         data_objects = parse_json_file(file_path)
-        print(f"Successfully parsed {len(data_objects)} JSON objects")
 
         # Extract and organize metrics
         metrics_by_type = extract_metrics(data_objects)
-        print(f"Found {len(metrics_by_type)} different task graph types")
 
         # Calculate statistics
         results = analyze_metrics(metrics_by_type)
