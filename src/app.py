@@ -243,6 +243,8 @@ def main():
         ("Performance Dashboard", "Key performance metrics for each task graph (total execution time, average kernel time, etc)."),
         ("Memory Usage", "Total and average memory usage (copy-in bytes) for each task graph."),
         ("Power Usage", "Average power usage for each task graph."),
+        ("Copy-In/Copy-Out Analysis", "Analyze the time and number of operations spent on data transfers into and out of the device."),
+        ("Total Execution Time Analysis", "Break down the total execution time of the application by task graph and action."),
         ("Summary Statistics", "Statistical summary of the selected metrics."),
         ("Raw Data", "The raw input data as a DataFrame."),
     ]
@@ -252,7 +254,7 @@ def main():
 
     for metric, tooltip in metrics_info:
         default = metric in [
-            "Task Time Distribution", "Performance Dashboard", "Memory Usage", "Power Usage", "Summary Statistics"
+            "Task Time Distribution", "Performance Dashboard", "Memory Usage", "Power Usage", "Copy-In/Copy-Out Analysis", "Total Execution Time Analysis", "Summary Statistics"
         ]
         show_metrics[metric] = st.sidebar.checkbox(
             f"{metric} ⓘ",
@@ -307,12 +309,24 @@ def main():
         The generated CSV is saved in the `generated_csv` directory and is available for download after processing.
         """)
 
+    csv_path = None
     if uploaded_file is not None:
         try:
             summary_df, raw_df, csv_path = process_uploaded_file(uploaded_file)
             if summary_df.empty or raw_df.empty:
                 st.error("No data found in the uploaded file")
                 return
+
+            # Show CSV download info in the sidebar
+            st.sidebar.markdown('---')
+            st.sidebar.markdown(
+                "<div style='font-weight:600; font-size:1.1em; color:#4FC3F7; display:flex; align-items:center; gap:0.4em;'>📥 Status</div>",
+                unsafe_allow_html=True
+            )
+            if csv_path:
+                st.sidebar.success(f"CSV generated and saved at: {csv_path}")
+                with open(csv_path, 'rb') as f:
+                    st.sidebar.download_button('Download generated CSV', f, file_name=os.path.basename(csv_path))
 
             left_col, right_col = st.columns([2, 1])
 
@@ -348,125 +362,125 @@ def main():
 
                 if show_metrics["Memory Usage"]:
                     st.header("Memory Usage")
+                    st.markdown("""
+                    **What you see:**
+                    - The bar chart below shows the total and average memory usage (in bytes) for each task graph.
+                    - This helps you identify which task graphs are the most memory-intensive in your workload.
+                    - Memory usage is based on the total size of data copied into the device (copy-in bytes).
+                    """)
                     st.plotly_chart(visualizer.create_memory_usage_chart(summary_df))
 
                 if show_metrics["Power Usage"]:
                     st.header("Power Usage")
                     st.plotly_chart(visualizer.create_power_usage_chart(summary_df))
 
-                # --- Copy-In/Copy-Out Analysis ---
-                st.header("Copy-In/Copy-Out Analysis")
-                st.markdown("""
-                This section analyzes the time spent on data transfers into and out of the device (copy-in/copy-out),
-                how many such operations occurred, and how much they contribute to the total execution time.
-                """)
-                # Aggregate copy-in/out times and counts
-                copy_in = raw_df[raw_df['Metric'] == 'COPY_IN_TIME'].copy()
-                copy_out = raw_df[raw_df['Metric'] == 'COPY_OUT_TIME'].copy()
-                total_copy_in_time = (copy_in['Mean'] * copy_in['Count']).sum()
-                total_copy_out_time = (copy_out['Mean'] * copy_out['Count']).sum()
-                num_copy_in = copy_in['Count'].sum()
-                num_copy_out = copy_out['Count'].sum()
-                # Convert to selected time unit
-                total_copy_in_time_conv = convert_time_unit(pd.Series([total_copy_in_time]), 'ns', time_unit).iloc[0]
-                total_copy_out_time_conv = convert_time_unit(pd.Series([total_copy_out_time]), 'ns', time_unit).iloc[0]
-                # Use only OVERALL rows for total exec time
-                overall_exec_time = raw_df[(raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'TOTAL_TASK_GRAPH_TIME')]
-                total_exec_time = (overall_exec_time['Mean'] * overall_exec_time['Count']).sum()
-                percent_in = round((total_copy_in_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
-                percent_out = round((total_copy_out_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
-                # Table
-                copy_table = pd.DataFrame({
-                    'Type': ['Copy-In', 'Copy-Out'],
-                    f'Total Time ({time_unit})': [total_copy_in_time_conv, total_copy_out_time_conv],
-                    'Num Operations': [num_copy_in, num_copy_out],
-                    '% of Total Exec Time': [percent_in, percent_out]
-                })
-                st.dataframe(copy_table)
-                # Bar chart
-                fig_copy = go.Figure(data=[
-                    go.Bar(name='Total Time', x=['Copy-In', 'Copy-Out'], y=[total_copy_in_time_conv, total_copy_out_time_conv]),
-                    go.Bar(name='Num Operations', x=['Copy-In', 'Copy-Out'], y=[num_copy_in, num_copy_out], yaxis='y2')
-                ])
-                fig_copy.update_layout(
-                    title=f'Copy-In/Copy-Out Time and Operations',
-                    yaxis=dict(title=f'Time ({time_unit})'),
-                    yaxis2=dict(title='Num Operations', overlaying='y', side='right'),
-                    barmode='group'
-                )
-                st.plotly_chart(fig_copy)
+                if show_metrics["Copy-In/Copy-Out Analysis"]:
+                    st.header("Copy-In/Copy-Out Analysis")
+                    st.markdown("""
+                    This section analyzes the time spent on data transfers into and out of the device (copy-in/copy-out),
+                    how many such operations occurred, and how much they contribute to the total execution time.
+                    """)
+                    # Aggregate copy-in/out times and counts
+                    copy_in = raw_df[raw_df['Metric'] == 'COPY_IN_TIME'].copy()
+                    copy_out = raw_df[raw_df['Metric'] == 'COPY_OUT_TIME'].copy()
+                    total_copy_in_time = (copy_in['Mean'] * copy_in['Count']).sum()
+                    total_copy_out_time = (copy_out['Mean'] * copy_out['Count']).sum()
+                    num_copy_in = copy_in['Count'].sum()
+                    num_copy_out = copy_out['Count'].sum()
+                    # Convert to selected time unit
+                    total_copy_in_time_conv = convert_time_unit(pd.Series([total_copy_in_time]), 'ns', time_unit).iloc[0]
+                    total_copy_out_time_conv = convert_time_unit(pd.Series([total_copy_out_time]), 'ns', time_unit).iloc[0]
+                    # Use only OVERALL rows for total exec time
+                    overall_exec_time = raw_df[(raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'TOTAL_TASK_GRAPH_TIME')]
+                    total_exec_time = (overall_exec_time['Mean'] * overall_exec_time['Count']).sum()
+                    percent_in = round((total_copy_in_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
+                    percent_out = round((total_copy_out_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
+                    # Table
+                    copy_table = pd.DataFrame({
+                        'Type': ['Copy-In', 'Copy-Out'],
+                        f'Total Time ({time_unit})': [total_copy_in_time_conv, total_copy_out_time_conv],
+                        'Num Operations': [num_copy_in, num_copy_out],
+                        '% of Total Exec Time': [percent_in, percent_out]
+                    })
+                    st.dataframe(copy_table)
+                    # Bar chart
+                    fig_copy = go.Figure(data=[
+                        go.Bar(name='Total Time', x=['Copy-In', 'Copy-Out'], y=[total_copy_in_time_conv, total_copy_out_time_conv]),
+                        go.Bar(name='Num Operations', x=['Copy-In', 'Copy-Out'], y=[num_copy_in, num_copy_out], yaxis='y2')
+                    ])
+                    fig_copy.update_layout(
+                        title=f'Copy-In/Copy-Out Time and Operations',
+                        yaxis=dict(title=f'Time ({time_unit})'),
+                        yaxis2=dict(title='Num Operations', overlaying='y', side='right'),
+                        barmode='group'
+                    )
+                    st.plotly_chart(fig_copy)
 
-                # --- Total Execution Time Analysis ---
-                st.header("Total Execution Time Analysis")
-                st.markdown("""
-                This section breaks down the total execution time of the application, showing how much each task graph and their actions (kernel, dispatch, copy-in, copy-out) contribute to it.
-                """)
-                # Calculate total execution time (OVERALL TOTAL_TASK_GRAPH_TIME)
-                overall_exec_time = raw_df[(raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'TOTAL_TASK_GRAPH_TIME')]
-                total_exec_time = (overall_exec_time['Mean'] * overall_exec_time['Count']).sum()
-                total_exec_time_conv = convert_time_unit(pd.Series([total_exec_time]), 'ns', time_unit).iloc[0]
-                # For each task graph, get times for each action
-                task_graphs = overall_exec_time['Task Graph'].unique()
-                breakdown_rows = []
-                for graph in task_graphs:
-                    row = {'Task Graph': graph}
-                    # Total time for this graph
-                    graph_total = (overall_exec_time[overall_exec_time['Task Graph'] == graph]['Mean'] * overall_exec_time[overall_exec_time['Task Graph'] == graph]['Count']).sum()
-                    graph_total_conv = convert_time_unit(pd.Series([graph_total]), 'ns', time_unit).iloc[0]
-                    row['Total Time'] = graph_total_conv
-                    row['% of Total'] = round((graph_total / total_exec_time * 100), 2) if total_exec_time > 0 else 0
-                    # Kernel
-                    kernel = raw_df[(raw_df['Task Graph'] == graph) & (raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'TOTAL_KERNEL_TIME')]
-                    kernel_time = (kernel['Mean'] * kernel['Count']).sum()
-                    kernel_time_conv = convert_time_unit(pd.Series([kernel_time]), 'ns', time_unit).iloc[0]
-                    row['Kernel Time'] = kernel_time_conv
-                    row['Kernel %'] = round((kernel_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
-                    # Dispatch
-                    dispatch = raw_df[(raw_df['Task Graph'] == graph) & (raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'TOTAL_DISPATCH_KERNEL_TIME')]
-                    dispatch_time = (dispatch['Mean'] * dispatch['Count']).sum()
-                    dispatch_time_conv = convert_time_unit(pd.Series([dispatch_time]), 'ns', time_unit).iloc[0]
-                    row['Dispatch Time'] = dispatch_time_conv
-                    row['Dispatch %'] = round((dispatch_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
-                    # Copy-In
-                    copyin = raw_df[(raw_df['Task Graph'] == graph) & (raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'COPY_IN_TIME')]
-                    copyin_time = (copyin['Mean'] * copyin['Count']).sum()
-                    copyin_time_conv = convert_time_unit(pd.Series([copyin_time]), 'ns', time_unit).iloc[0]
-                    row['Copy-In Time'] = copyin_time_conv
-                    row['Copy-In %'] = round((copyin_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
-                    # Copy-Out
-                    copyout = raw_df[(raw_df['Task Graph'] == graph) & (raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'COPY_OUT_TIME')]
-                    copyout_time = (copyout['Mean'] * copyout['Count']).sum()
-                    copyout_time_conv = convert_time_unit(pd.Series([copyout_time]), 'ns', time_unit).iloc[0]
-                    row['Copy-Out Time'] = copyout_time_conv
-                    row['Copy-Out %'] = round((copyout_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
-                    breakdown_rows.append(row)
-                breakdown_df = pd.DataFrame(breakdown_rows)
-                st.dataframe(breakdown_df)
-                # Stacked bar chart
-                fig_stack = go.Figure()
-                fig_stack.add_trace(go.Bar(
-                    name='Kernel', x=breakdown_df['Task Graph'], y=breakdown_df['Kernel Time'], marker_color='royalblue'))
-                fig_stack.add_trace(go.Bar(
-                    name='Dispatch', x=breakdown_df['Task Graph'], y=breakdown_df['Dispatch Time'], marker_color='orange'))
-                fig_stack.add_trace(go.Bar(
-                    name='Copy-In', x=breakdown_df['Task Graph'], y=breakdown_df['Copy-In Time'], marker_color='green'))
-                fig_stack.add_trace(go.Bar(
-                    name='Copy-Out', x=breakdown_df['Task Graph'], y=breakdown_df['Copy-Out Time'], marker_color='red'))
-                fig_stack.update_layout(
-                    barmode='stack',
-                    title=f'Task Graph Execution Time Breakdown ({time_unit})',
-                    yaxis_title=f'Time ({time_unit})',
-                    xaxis_title='Task Graph'
-                )
-                st.plotly_chart(fig_stack)
+                if show_metrics["Total Execution Time Analysis"]:
+                    st.header("Total Execution Time Analysis")
+                    st.markdown("""
+                    This section breaks down the total execution time of the application, showing how much each task graph and their actions (kernel, dispatch, copy-in, copy-out) contribute to it.
+                    """)
+                    # Calculate total execution time (OVERALL TOTAL_TASK_GRAPH_TIME)
+                    overall_exec_time = raw_df[(raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'TOTAL_TASK_GRAPH_TIME')]
+                    total_exec_time = (overall_exec_time['Mean'] * overall_exec_time['Count']).sum()
+                    total_exec_time_conv = convert_time_unit(pd.Series([total_exec_time]), 'ns', time_unit).iloc[0]
+                    # For each task graph, get times for each action
+                    task_graphs = overall_exec_time['Task Graph'].unique()
+                    breakdown_rows = []
+                    for graph in task_graphs:
+                        row = {'Task Graph': graph}
+                        # Total time for this graph
+                        graph_total = (overall_exec_time[overall_exec_time['Task Graph'] == graph]['Mean'] * overall_exec_time[overall_exec_time['Task Graph'] == graph]['Count']).sum()
+                        graph_total_conv = convert_time_unit(pd.Series([graph_total]), 'ns', time_unit).iloc[0]
+                        row['Total Time'] = graph_total_conv
+                        row['% of Total'] = round((graph_total / total_exec_time * 100), 2) if total_exec_time > 0 else 0
+                        # Kernel
+                        kernel = raw_df[(raw_df['Task Graph'] == graph) & (raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'TOTAL_KERNEL_TIME')]
+                        kernel_time = (kernel['Mean'] * kernel['Count']).sum()
+                        kernel_time_conv = convert_time_unit(pd.Series([kernel_time]), 'ns', time_unit).iloc[0]
+                        row['Kernel Time'] = kernel_time_conv
+                        row['Kernel %'] = round((kernel_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
+                        # Dispatch
+                        dispatch = raw_df[(raw_df['Task Graph'] == graph) & (raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'TOTAL_DISPATCH_KERNEL_TIME')]
+                        dispatch_time = (dispatch['Mean'] * dispatch['Count']).sum()
+                        dispatch_time_conv = convert_time_unit(pd.Series([dispatch_time]), 'ns', time_unit).iloc[0]
+                        row['Dispatch Time'] = dispatch_time_conv
+                        row['Dispatch %'] = round((dispatch_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
+                        # Copy-In
+                        copyin = raw_df[(raw_df['Task Graph'] == graph) & (raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'COPY_IN_TIME')]
+                        copyin_time = (copyin['Mean'] * copyin['Count']).sum()
+                        copyin_time_conv = convert_time_unit(pd.Series([copyin_time]), 'ns', time_unit).iloc[0]
+                        row['Copy-In Time'] = copyin_time_conv
+                        row['Copy-In %'] = round((copyin_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
+                        # Copy-Out
+                        copyout = raw_df[(raw_df['Task Graph'] == graph) & (raw_df['Task'] == 'OVERALL') & (raw_df['Metric'] == 'COPY_OUT_TIME')]
+                        copyout_time = (copyout['Mean'] * copyout['Count']).sum()
+                        copyout_time_conv = convert_time_unit(pd.Series([copyout_time]), 'ns', time_unit).iloc[0]
+                        row['Copy-Out Time'] = copyout_time_conv
+                        row['Copy-Out %'] = round((copyout_time / total_exec_time * 100), 2) if total_exec_time > 0 else 0
+                        breakdown_rows.append(row)
+                    breakdown_df = pd.DataFrame(breakdown_rows)
+                    st.dataframe(breakdown_df)
+                    # Stacked bar chart
+                    fig_stack = go.Figure()
+                    fig_stack.add_trace(go.Bar(
+                        name='Kernel', x=breakdown_df['Task Graph'], y=breakdown_df['Kernel Time'], marker_color='royalblue'))
+                    fig_stack.add_trace(go.Bar(
+                        name='Dispatch', x=breakdown_df['Task Graph'], y=breakdown_df['Dispatch Time'], marker_color='orange'))
+                    fig_stack.add_trace(go.Bar(
+                        name='Copy-In', x=breakdown_df['Task Graph'], y=breakdown_df['Copy-In Time'], marker_color='green'))
+                    fig_stack.add_trace(go.Bar(
+                        name='Copy-Out', x=breakdown_df['Task Graph'], y=breakdown_df['Copy-Out Time'], marker_color='red'))
+                    fig_stack.update_layout(
+                        barmode='stack',
+                        title=f'Task Graph Execution Time Breakdown ({time_unit})',
+                        yaxis_title=f'Time ({time_unit})',
+                        xaxis_title='Task Graph'
+                    )
+                    st.plotly_chart(fig_stack)
 
             with right_col:
-                # CSV download info
-                if csv_path:
-                    st.success(f"CSV generated and saved at: {csv_path}")
-                    with open(csv_path, 'rb') as f:
-                        st.download_button('Download generated CSV', f, file_name=os.path.basename(csv_path))
-
                 # --- Format summary statistics for display ---
                 summary_stats_df = summary_df.copy()
                 for col in ['total_task_graph_time', 'total_kernel_time', 'total_dispatch_time']:
