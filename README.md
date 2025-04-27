@@ -4,6 +4,10 @@
 </h1>
 TornadoVMPulse is an interactive web dashboard for visualizing and analyzing profiling data from [TornadoVM](https://tornadovm.readthedocs.io/en/latest/profiler.html). It provides deep insights into kernel execution, data transfer, memory, and power usage, with a modern, user-friendly interface.
 
+<p align="center">
+  <img src="docs/main.png" alt="TornadoVMPulse Main Screenshot" width="1024"/>
+</p>
+
 ---
 
 ## Features
@@ -52,10 +56,10 @@ TornadoVMPulse is an interactive web dashboard for visualizing and analyzing pro
 - Bar chart showing the sum of kernel execution times for each task, color-coded by task graph.
 - Pie chart for overall distribution.
 
-**Example Pie Chart:**
+**Example: Task Time Distribution as a Pie Chart (proportion of total kernel time per task):**
 ![Task Time Distribution Pie Chart](docs/task-time-distro.png)
 
-**Example Bar Chart:**
+**Example: Task Time Distribution as a Bar Chart (kernel time per task, color-coded by task graph):**
 ![Task Time Distribution Bar Chart](docs/task-time.png)
 
 ### Memory Usage
